@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -48,24 +49,43 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+    @Bean
+    public UserDetailsService userDetailsService(UserRepository userRepository) {
+        return new CustomUserDetailsService(userRepository);
+    }
 
-
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return provider;
+    }
 
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
-                OAuth2AuthorizationServerConfigurer.authorizationServer();
+               OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, (authorizationServer) ->
                         authorizationServer
-                                .oidc(withDefaults()) // Enable OpenID Connect 1.0
+                                .oidc(Customizer.withDefaults())	// Enable OpenID Connect 1.0
                 )
                 .authorizeHttpRequests((authorize) ->
                         authorize
+                                .requestMatchers("/oauth2/authorize").permitAll()
                                 .anyRequest().authenticated()
+                )
+                // Redirect to the login page when not authenticated from the
+                // authorization endpoint
+                .exceptionHandling((exceptions) -> exceptions
+                        .defaultAuthenticationEntryPointFor(
+                                new LoginUrlAuthenticationEntryPoint("/oauth2/authorize"),
+                                new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
+                        )
                 );
 
         return http.build();
@@ -75,33 +95,38 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Разрешить доступ к /oauth2/token без аутентификации
-                .authorizeHttpRequests((authorize) -> authorize
-                        .anyRequest().permitAll() // Все остальные запросы требуют аутентификации
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/oauth2/authorize").permitAll()
+                        .anyRequest().authenticated()
                 )
-                // Отключить форму логина, так как она не нужна для /oauth2/token
                 .formLogin(Customizer.withDefaults());
 
         return http.build();
     }
 
-
     @Bean
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
         RegisteredClient registeredClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("your-client-id")
-                .clientSecret(passwordEncoder.encode("your-client-secret")) // Хеширование!
+                .clientSecret(passwordEncoder.encode("your-client-secret"))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.PASSWORD) // Добавляем password grant
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE) // Основной grant type
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri("http://localhost:8080/posts")
+                .redirectUri("http://localhost:9000/login/oauth2/code/your-client-id") // Стандартный URI для Spring
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
-                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+                .clientSettings(
+                        ClientSettings.builder()
+                                .requireAuthorizationConsent(true) // Запрашивать согласие пользователя
+                                .build()
+                )
                 .build();
 
         return new InMemoryRegisteredClientRepository(registeredClient);
     }
+
+    // Остальные бины (jwkSource, passwordEncoder и т.д.) остаются без изменений.
+
 
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -143,10 +168,7 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    @Bean
-    public UserDetailsService userDetailsService(UserRepository userRepository) {
-        return new CustomUserDetailsService(userRepository);
-    }
+
 }
 
 

@@ -22,12 +22,16 @@ public class User implements UserDetails {
     private String login;
     private String password;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER) // Роль будет загружаться сразу
     @JoinColumn(name = "role_id")
     private Role role;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (role == null) {
+            // Возвращаем пустую коллекцию или роль по умолчанию
+            return List.of(new SimpleGrantedAuthority("ROLE_GUEST"));
+        }
         return List.of(new SimpleGrantedAuthority(role.getName()));
     }
 
