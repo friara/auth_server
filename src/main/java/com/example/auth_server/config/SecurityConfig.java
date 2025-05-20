@@ -144,7 +144,7 @@ public class SecurityConfig {
                                 .build()
                 )
                 .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofMinutes(15))
+                        .accessTokenTimeToLive(Duration.ofMinutes(120))
                         .refreshTokenTimeToLive(Duration.ofDays(30))
                         .reuseRefreshTokens(false)
                         .build()) // Исправлено: закрываем builder
