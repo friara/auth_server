@@ -113,15 +113,33 @@ public class SecurityConfig {
             throws Exception {
         http
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers("/login", "/css/**", "/js/**").permitAll() // Разрешаем доступ к ресурсам
                         .anyRequest().authenticated()
                 )
-                // Form login handles the redirect to the login page from the
-                // authorization server filter chain
-                .formLogin(Customizer.withDefaults())
-                .cors(Customizer.withDefaults()); // Включите CORS
+                .formLogin(form -> form
+                        .loginPage("/login") // Указываем кастомную страницу
+                        .permitAll()
+                )
+                .cors(Customizer.withDefaults());
 
         return http.build();
     }
+
+//    @Bean
+//    @Order(2)
+//    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http)
+//            throws Exception {
+//        http
+//                .authorizeHttpRequests((authorize) -> authorize
+//                        .anyRequest().authenticated()
+//                )
+//                // Form login handles the redirect to the login page from the
+//                // authorization server filter chain
+//                .formLogin(Customizer.withDefaults())
+//                .cors(Customizer.withDefaults()); // Включите CORS
+//
+//        return http.build();
+//    }
 
 
     @Bean
